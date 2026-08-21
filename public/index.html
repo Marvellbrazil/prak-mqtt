@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Device Telemetry</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-200 min-h-screen p-4 md:p-8 antialiased">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-slate-800">
+      <div class="flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 shadow-sm">
+          <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base font-semibold text-white tracking-tight" id="device-id">ESP32 DevKit</h1>
+            <span id="chip-badge" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-900 text-slate-400 border border-slate-800">ESP32</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+            <span>Uptime: <strong id="val-uptime" class="text-slate-400 font-mono font-normal">00:00:00</strong></span>
+            <span>&bull;</span>
+            <span id="last-update">Waiting for data</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <span id="ws-dot" class="w-2 h-2 rounded-full bg-rose-500"></span>
+          <span id="ws-label" class="font-mono text-slate-400">Offline</span>
+        </div>
+        <div id="status-badge" class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400">
+          Ready
+        </div>
+      </div>
+    </header>
+
+    <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+      <div>
+        <span class="text-slate-500 block text-[11px]">Network SSID</span>
+        <span id="net-ssid" class="font-medium text-slate-200 mt-0.5 block">-</span>
+      </div>
+      <div>
+        <span class="text-slate-500 block text-[11px]">IP Address</span>
+        <span id="net-ip" class="font-mono text-slate-300 mt-0.5 block">-</span>
+      </div>
+      <div>
+        <span class="text-slate-500 block text-[11px]">Gateway</span>
+        <span id="net-gw" class="font-mono text-slate-300 mt-0.5 block">-</span>
+      </div>
+      <div>
+        <span class="text-slate-500 block text-[11px]">MAC Address</span>
+        <span id="net-mac" class="font-mono text-slate-400 mt-0.5 block">-</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-medium">Core Temperature</span>
+          <i data-lucide="thermometer" class="w-4 h-4 text-slate-500"></i>
+        </div>
+        <div class="mt-4">
+          <div class="text-2xl font-bold font-mono text-white tracking-tight"><span id="val-temp">--</span><span class="text-sm font-sans text-slate-400 ml-1">&deg;C</span></div>
+          <span id="temp-status" class="text-[11px] text-slate-500 mt-1 block">Normal Operation</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-medium">Touch Input (GPIO 4)</span>
+          <i data-lucide="fingerprint" class="w-4 h-4 text-slate-500"></i>
+        </div>
+        <div class="mt-4">
+          <div class="text-2xl font-bold font-mono text-white tracking-tight" id="val-touch">--</div>
+          <span id="touch-status" class="text-[11px] text-slate-500 mt-1 block">No Contact</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-medium">RAM Allocation</span>
+          <i data-lucide="activity" class="w-4 h-4 text-slate-500"></i>
+        </div>
+        <div class="mt-4 space-y-2">
+          <div class="flex justify-between items-baseline">
+            <span id="val-heap-pct" class="text-2xl font-bold font-mono text-white tracking-tight">0%</span>
+            <span class="text-xs font-mono text-slate-400"><span id="val-free-heap">0</span> KB free</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="heap-bar" class="bg-indigo-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="text-xs font-medium">Signal Quality</span>
+          <i data-lucide="wifi" class="w-4 h-4 text-slate-500"></i>
+        </div>
+        <div class="mt-4 space-y-2">
+          <div class="flex justify-between items-baseline">
+            <span class="text-2xl font-bold font-mono text-white tracking-tight"><span id="val-rssi">--</span> <span class="text-sm font-sans font-normal text-slate-400">dBm</span></span>
+            <span id="val-signal-pct" class="text-xs font-mono text-slate-400">0%</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="signal-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Live Telemetry Plot</h2>
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <span class="flex items-center gap-1.5 text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Temp (&deg;C)</span>
+            <span class="flex items-center gap-1.5 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Touch</span>
+          </div>
+        </div>
+        <div class="relative h-64 w-full">
+          <canvas id="telemetryChart"></canvas>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 space-y-3.5">
+          <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Hardware Summary</h3>
+          <div class="space-y-2 text-xs divide-y divide-slate-800/60">
+            <div class="flex justify-between py-1.5">
+              <span class="text-slate-500">Processor</span>
+              <span id="sys-cpu" class="font-mono text-slate-300">Dual Core @ 240MHz</span>
+            </div>
+            <div class="flex justify-between py-1.5">
+              <span class="text-slate-500">Flash Memory</span>
+              <span id="sys-flash" class="font-mono text-slate-300">4 MB</span>
+            </div>
+            <div class="flex justify-between py-1.5">
+              <span class="text-slate-500">Hall Magnetic Flux</span>
+              <span id="val-hall" class="font-mono text-slate-300">--</span>
+            </div>
+            <div class="flex justify-between py-1.5">
+              <span class="text-slate-500">Min Available Heap</span>
+              <span id="val-min-heap" class="font-mono text-slate-300">-- KB</span>
+            </div>
+          </div>
+        </div>
+
+        <details class="group bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs overflow-hidden">
+          <summary class="flex items-center justify-between p-4 cursor-pointer select-none text-slate-400 hover:text-slate-200">
+            <span class="font-medium">Raw Payload Stream</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180"></i>
+          </summary>
+          <div class="p-4 pt-0 border-t border-slate-800/40">
+            <pre id="raw-json" class="font-mono text-[11px] text-slate-400 bg-slate-950 p-3 rounded-lg overflow-x-auto max-h-40">Waiting for payload...</pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    const MAX_POINTS = 25;
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port || 3000}`;
+
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Temperature (°C)',
+            borderColor: '#f59e0b',
+            backgroundColor: 'transparent',
+            data: [],
+            tension: 0.3,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Touch',
+            borderColor: '#10b981',
+            backgroundColor: 'transparent',
+            data: [],
+            tension: 0.3,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.03)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+          },
+          y: {
+            type: 'linear',
+            position: 'left',
+            grid: { color: 'rgba(255, 255, 255, 0.03)' },
+            ticks: { color: '#f59e0b', font: { family: 'JetBrains Mono', size: 10 } }
+          },
+          y1: {
+            type: 'linear',
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#10b981', font: { family: 'JetBrains Mono', size: 10 } }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#020617',
+            borderColor: '#1e293b',
+            borderWidth: 1,
+            titleFont: { family: 'JetBrains Mono', size: 11 },
+            bodyFont: { family: 'JetBrains Mono', size: 11 }
+          }
+        }
+      }
+    });
+
+    const wsDot = document.getElementById('ws-dot');
+    const wsLabel = document.getElementById('ws-label');
+
+    function humanizeBootReason(reason) {
+      if (!reason) return 'Normal';
+      if (reason.includes('POWERON')) return 'Power On';
+      if (reason.includes('DEEPSLEEP')) return 'Wake from Sleep';
+      if (reason.includes('SW')) return 'Software Restart';
+      if (reason.includes('WDT')) return 'Watchdog Reset';
+      return 'Normal';
+    }
+
+    function formatDuration(sec) {
+      if (!sec) return '00:00:00';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function connect() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        wsDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        wsLabel.textContent = 'Live';
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          const d = payload.data;
+          if (!d) return;
+
+          if (d.device_id) document.getElementById('device-id').textContent = d.device_id;
+          if (d.uptime_sec !== undefined) document.getElementById('val-uptime').textContent = formatDuration(d.uptime_sec);
+          if (d.received_at) document.getElementById('last-update').textContent = new Date(d.received_at).toLocaleTimeString();
+
+          document.getElementById('raw-json').textContent = JSON.stringify(d, null, 2);
+
+          if (d.network) {
+            document.getElementById('net-ssid').textContent = `${d.network.ssid || '-'} (CH ${d.network.channel || '-'})`;
+            document.getElementById('net-ip').textContent = d.network.ip || '-';
+            document.getElementById('net-gw').textContent = d.network.gateway || '-';
+            document.getElementById('net-mac').textContent = d.network.mac || '-';
+            document.getElementById('val-rssi').textContent = d.network.rssi_dbm ?? '--';
+            document.getElementById('val-signal-pct').textContent = `${d.network.signal_pct ?? 0}%`;
+            document.getElementById('signal-bar').style.width = `${d.network.signal_pct ?? 0}%`;
+          }
+
+          if (d.sensors) {
+            const temp = d.sensors.chip_temp_c;
+            document.getElementById('val-temp').textContent = temp ?? '--';
+            document.getElementById('temp-status').textContent = temp > 65 ? 'Elevated Temperature' : 'Normal Temperature';
+            
+            const touch = d.sensors.touch_gpio4;
+            document.getElementById('val-touch').textContent = touch ?? '--';
+            document.getElementById('touch-status').textContent = touch < 30 ? 'Contact Detected' : 'No Contact';
+
+            document.getElementById('val-hall').textContent = d.sensors.hall_effect ?? '--';
+
+            const time = new Date(d.received_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            chart.data.labels.push(time);
+            chart.data.datasets[0].data.push(temp);
+            chart.data.datasets[1].data.push(touch);
+
+            if (chart.data.labels.length > MAX_POINTS) {
+              chart.data.labels.shift();
+              chart.data.datasets[0].data.shift();
+              chart.data.datasets[1].data.shift();
+            }
+            chart.update();
+          }
+
+          if (d.system) {
+            if (d.system.chip_model) {
+              document.getElementById('chip-badge').textContent = `${d.system.chip_model} r${d.system.chip_revision ?? 0}`;
+            }
+            document.getElementById('sys-cpu').textContent = `${d.system.chip_cores ?? 2} Cores @ ${d.system.cpu_mhz ?? 240}MHz`;
+            document.getElementById('sys-flash').textContent = `${d.system.flash_mb ?? 4} MB (${d.system.flash_speed_mhz ?? 80}MHz)`;
+            document.getElementById('status-badge').textContent = humanizeBootReason(d.system.reset_reason_cpu0);
+
+            const freeHeap = d.system.free_heap_kb ?? 0;
+            const heapPct = d.system.heap_usage_pct ?? 0;
+            document.getElementById('val-free-heap').textContent = freeHeap;
+            document.getElementById('val-heap-pct').textContent = `${heapPct}%`;
+            document.getElementById('heap-bar').style.width = `${Math.min(100, Math.max(0, heapPct))}%`;
+            document.getElementById('val-min-heap').textContent = `${d.system.min_free_heap_kb ?? 0} KB`;
+          }
+
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      ws.onclose = () => {
+        wsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        wsLabel.textContent = 'Offline';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    connect();
+  </script>
+</body>
+
+</html>

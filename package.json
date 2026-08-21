@@ -1,0 +1,15 @@
+{
+  "name": "esp32-hivemq-dashboard",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "mqtt": "^5.15.2",
+    "ws": "^8.21.3"
+  }
+}
